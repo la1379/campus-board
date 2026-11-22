@@ -93,16 +93,36 @@ async function main() {
     _weights: { major: 0.4, city: 0.3, direction: 0.3 },
   });
 
+  // --blank-profile：发布出去时不带个人求职画像。
+  //
+  // 为什么默认要清空：匹配度依赖「工业工程 + 杭州 + 2027届」这组条件，
+  // 内联进 HTML 就等于公开了「谁在找工作、什么专业、想去哪」。
+  // 同学打开后匹配度全是 0，点「我的档案」填自己的就行 —— 功能不受影响。
+  const blankProfile = process.argv.includes('--blank-profile');
+  const outProfile = blankProfile
+    ? { majors: [], cities: [], directions: [], batch: '', education: '',
+        _weights: profile._weights || { major: 0.4, city: 0.3, direction: 0.3 } }
+    : profile;
+
   const slim = slimJobs(data);
-  const payload = { data: slim, profile };
+  const payload = { data: slim, profile: outProfile };
   const jsonSize = Buffer.byteLength(JSON.stringify(payload), 'utf8');
   if (jsonSize > MAX_JSON_BYTES) {
     console.error(`X 内联数据 ${(jsonSize / 1048576).toFixed(1)}MB，超过 ${MAX_JSON_BYTES / 1048576}MB 上限`);
     process.exit(1);
   }
 
-  await fs.rm(DIST, { recursive: true, force: true });
+  // 不要 rm -rf dist 整个目录 —— Windows 上刚关掉的服务可能还占着句柄，
+  // 目录删不掉会 EBUSY 直接失败。改成逐文件覆盖，目录本身保留。
   await fs.mkdir(DIST, { recursive: true });
+  try {
+    for (const name of await fs.readdir(DIST)) {
+      await fs.rm(path.join(DIST, name), { recursive: true, force: true });
+    }
+  } catch (e) {
+    // 单个文件删不掉（被占用），跳过它继续 —— 下次改写会覆盖
+    if (!/EBUSY|EPERM/.test(e.code || '')) throw e;
+  }
 
   const stamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
@@ -126,6 +146,7 @@ async function main() {
 
   console.log('  数据条数   : ' + slim.jobs.length);
   console.log('  内联大小   : ' + (jsonSize / 1024).toFixed(0) + ' KB');
+  console.log('  个人档案   : ' + (blankProfile ? '已清空（不公开求职画像）' : '保留'));
   console.log('  产物       : dist/index.html, dist/app.js, dist/style.css');
   const htmlSize = Buffer.byteLength(html, 'utf8');
   console.log('  index.html : ' + (htmlSize / 1024).toFixed(0) + ' KB');

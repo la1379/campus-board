@@ -128,20 +128,36 @@
 
   /**
    * 打分：专业 0.4 / 城市 0.3 / 方向 0.3，三项独立，最多 100。
-   * 返回 {score, hits:[{kind,text}], misses:[]} —— hits 用来解释「为什么是这个分」。
+   * 返回 {score, hits, miss} —— hits 用来解释「为什么是这个分」。
    *
-   * 为什么不用模型：来解释比真假更重要。关键词命中是用户能自己复核的；
+   * 为什么不用模型：可解释性比精确更重要。关键词命中是用户能自己复核的；
    * 模型给个 73 分却说不出理由，反而不能信。
+   *
+   * 铁律：**没填档案就不该有分数。**
+   * 空档案时如果还按「专业不限=满分」「全国招聘=满分」算，
+   * 会显示出 30%~40% 的虚假匹配 —— 那些分不是「适合你」，只是「谁都能投」。
    */
   function scoreJob(job) {
     var P = PROFILE || DEFAULT_PROFILE;
     var W = P._weights || DEFAULT_PROFILE._weights;
+
+    // 档案没填的维度直接不计分，也不把它算成「命中」。
+    var hasMajor = (P.majors || []).length > 0;
+    var hasCity = (P.cities || []).length > 0;
+    var hasDir = (P.directions || []).length > 0;
+
+    if (!hasMajor && !hasCity && !hasDir) {
+      return { score: 0, hits: [], miss: ['还没填「我的档案」'] };
+    }
+
     var score = 0, hits = [], miss = [];
 
     // --- 专业 ---
     var majors = job.majors || [];
     var myMajors = P.majors || [];
-    if (!majors.length) {
+    if (!hasMajor) {
+      miss.push('未设专业');
+    } else if (!majors.length) {
       miss.push('未写专业要求');
     } else if (majors.indexOf('不限') >= 0) {
       score += W.major;
@@ -158,10 +174,12 @@
       }
     }
 
-    // --- 城市（全国岗直接算命中）---
+    // --- 城市 ---
     var cities = job.cities || [];
     var myCities = P.cities || [];
-    if (job.nationwide) {
+    if (!hasCity) {
+      miss.push('未设城市');
+    } else if (job.nationwide) {
       score += W.city;
       hits.push('全国招聘');
     } else if (!cities.length) {
@@ -184,14 +202,18 @@
       .concat([job.work_content, job.jobCategory, job.jobDirection, job.note])
       .join(' ');
     var dirs = P.directions || [];
-    var hitD = dirs.filter(function (d) { return d && blob.indexOf(d) >= 0; });
-    if (hitD.length) {
-      // 命中越多给满，命中 1 个给 60%（不因为凑巧撞到一个词就给满分）
-      var ratio = Math.min(1, 0.6 + (hitD.length - 1) * 0.2);
-      score += W.direction * ratio;
-      hits.push('方向「' + hitD.slice(0, 3).join('、') + '」');
+    if (!hasDir) {
+      miss.push('未设方向');
     } else {
-      miss.push('方向不相关');
+      var hitD = dirs.filter(function (d) { return d && blob.indexOf(d) >= 0; });
+      if (hitD.length) {
+        // 命中越多给满，命中 1 个给 60%（不因为凑巧撞到一个词就给满分）
+        var ratio = Math.min(1, 0.6 + (hitD.length - 1) * 0.2);
+        score += W.direction * ratio;
+        hits.push('方向「' + hitD.slice(0, 3).join('、') + '」');
+      } else {
+        miss.push('方向不相关');
+      }
     }
 
     // --- 届数（不加分，但明显不符要标出来）---
@@ -287,6 +309,8 @@
       };
     }
     if (key === 'match') {
+      // 空档案时按匹配度排等于乱排（全是 0），退回按截止日
+      if (profileEmpty()) return sorter('deadline');
       // 先按分数降序；同分时快截止的靠前
       return function (a, b) {
         var d = scoreOf(b).score - scoreOf(a).score;
@@ -312,17 +336,21 @@
   function renderStats() {
     var jobs = DATA.jobs || [];
     var active = 0, soon = 0, star = 0, match = 0;
+    var empty = profileEmpty();
     jobs.forEach(function (j) {
       var st = stateOf(j);
       if (st.code !== 'expired') active++;
       if (st.code === 'soon') soon++;
       if (j.starred && st.code !== 'expired') star++;
-      if (st.code !== 'expired' && scoreOf(j).score >= 60) match++;
+      if (!empty && st.code !== 'expired' && scoreOf(j).score >= 60) match++;
     });
     el('statRow').innerHTML =
       stat(active, '当前可投', '') +
       stat(soon, '7 天内截止', soon ? 'hot' : '') +
-      stat(match, '匹配 ≥60%', match ? 'match' : '') +
+      // 空档案时这一格换成提示，而不是显示 0
+      (empty
+        ? stat('?', '点「我的档案」算匹配', 'match')
+        : stat(match, '匹配 ≥60%', match ? 'match' : '')) +
       stat(star, '★ 关注', '') +
       stat(jobs.length, '总计', 'done');
   }
@@ -612,7 +640,15 @@
     document.body.removeChild(ta);
   }
 
+  function profileEmpty() {
+    var P = PROFILE || DEFAULT_PROFILE;
+    return !(P.majors || []).length && !(P.cities || []).length &&
+           !(P.directions || []).length;
+  }
+
   function matchChip(job) {
+    // 空档案不显示分数：那个 0% 没有信息量，还会让人以为「全都不匹配」。
+    if (profileEmpty()) return '';
     var m = scoreOf(job);
     if (!m.score) return '';
     var title = m.hits.length ? m.hits.join(' ｜ ') : '没命中任何条件';
@@ -877,6 +913,37 @@
     });
   }
 
+  // 首次打开（没填过档案）给一句引导。只提示一次，填完就不再出现。
+  function maybePromptProfile() {
+    if (!profileEmpty()) return;
+    try {
+      if (localStorage.getItem('campus-board-prompted') === '1') return;
+      localStorage.setItem('campus-board-prompted', '1');
+    } catch (e) { /* 禁用 localStorage 时就直接提示 */ }
+
+    var bar = document.createElement('div');
+    bar.className = 'onboard';
+    bar.innerHTML =
+      '<span>填一下你的专业、城市、方向，这张表就能按「跟你有多像」排序。</span>' +
+      '<button class="btn on" id="onboardGo">填一下</button>' +
+      '<button class="btn" id="onboardX" title="关闭">×</button>';
+    var main = document.querySelector('main.wrap');
+    if (main) main.insertBefore(bar, main.firstChild);
+    // 顶部工具栏是 sticky 的，会盖住页面最上方的一块内容。
+    // 引导条正好在最上面，得主动滚一下才能看全。
+    requestAnimationFrame(function () {
+      var top = bar.getBoundingClientRect().top + window.scrollY - 130;
+      window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+    });
+
+    var open = function () {
+      bar.remove();
+      if (el('profilePanel').classList.contains('hidden')) el('profileBtn').click();
+    };
+    el('onboardGo').addEventListener('click', open);
+    el('onboardX').addEventListener('click', function () { bar.remove(); });
+  }
+
   // ---------- 启动 ----------
 
   function boot() {
@@ -896,6 +963,7 @@
         bindProfile();
         syncControls();
         render();
+        maybePromptProfile();
       })
       .catch(function (e) {
         el('subline').textContent = '数据载入失败';

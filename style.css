@@ -545,6 +545,27 @@ td.note { color: var(--ink-3); max-width: 300px; }
 .match.m-low  { background: var(--bg); color: var(--ink-3); border: 1px solid var(--line); }
 .match.m-none { background: transparent; color: var(--ink-3); border: 1px dashed var(--line); }
 
+/* ---------- 首次引导 ---------- */
+
+.onboard {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--accent-soft);
+  color: var(--accent);
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  /* 工具栏是 sticky 的，会盖住第一块内容，给引导条留出高度 */
+  scroll-margin-top: 130px;
+}
+.onboard > span { flex: 1 1 240px; line-height: 1.5; }
+.onboard .btn { background: var(--card); border-color: transparent; }
+.onboard .btn.on { background: var(--accent); color: #fff; }
+
 /* ---------- 手机 ---------- */
 
 @media (max-width: 640px) {

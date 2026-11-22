@@ -46,7 +46,9 @@ console.log('');
 
 // ---------- 1. 生成 dist ----------
 console.log('  [1/4] 生成静态站…');
-run('node scripts/publish.mjs', { stdio: 'inherit' });
+// 发布版清空个人档案：不把「谁在找工作/什么专业/想去哪」内联进公开网页。
+// 同学打开自己填就行，功能不受影响。
+run('node scripts/publish.mjs --blank-profile', { stdio: 'inherit' });
 if (!fs.existsSync(path.join(DIST, 'index.html'))) {
   console.error('X dist/index.html 没生成，停下');
   process.exit(1);

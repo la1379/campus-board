@@ -522,7 +522,7 @@
 
   var CH_LABEL = {
     email: '邮箱', link: '网申链接', wechat: '公众号',
-    site: '官网', unknown: '',
+    site: '官网', unknown: '怎么投',
   };
 
   function channelCell(job) {
@@ -531,69 +531,120 @@
     // 邮箱：做成可点击复制的按钮
     if (job.channel_email) {
       return '<button class="ch ch-copy" data-copy="' + esc(job.channel_email) +
-        '" title="点击复制">✉ ' + esc(job.channel_email) + '</button>';
+        '" title="点击复制邮箱">✉ ' + esc(job.channel_email) + '</button>';
     }
     if (job.channel_url) {
       return '<a class="ch" href="' + esc(job.channel_url) +
         '" target="_blank" rel="noopener">↗ ' + (CH_LABEL[t] || '链接') + '</a>';
     }
     if (job.channel_steps) {
-      // 投递路径很长（"关注公众号 → 菜单 → 投递"），放不进卡片。
-      // 原先只是个带 title 的 span，只有鼠标悬停才看得到 ——
-      // 手机上根本没有悬停，等于看不到。改成点击弹出完整路径。
+      // 有真实投递路径。弹层里按内容给可执行动作，见 buildStepsPanel。
       return '<button class="ch ch-steps" data-steps="' + esc(job.channel_steps) +
-        '">' +
-        esc(t === 'wechat' ? '公众号' : '投递路径') +
-        '<i class="caret">▾</i></button>';
+        '" data-company="' + esc(job.company) + '" data-type="' + esc(t) + '"' +
+        '" data-title="' + esc((job.positions || [])[0] || job.title || '') + '">' +
+        esc(t === 'wechat' ? '公众号' : '怎么投') + '<i class="caret">▾</i></button>';
     }
     return '';
   }
 
-  // 点击「投递路径」弹出完整文字，可一键复制
+  // 点击「怎么投」弹出的内容：
+  // 不是把那段文字复制给用户就完事 —— 要给出**能直接执行的动作**。
+  function buildStepsPanel(steps, company, title, type) {
+    var notes = [];
+    var actions = [];
+
+    // 1. 路径里如果有网址，直接给"打开"
+    var u = /https?:\/\/[^\s，。；,;)）]+/.exec(steps);
+    // 2. 裸域名也认
+    if (!u) {
+      var d = /\b((?:[a-z0-9][a-z0-9-]*\.)+(?:com|cn|net|org|edu|gov)(?:\.[a-z]{2})?(?:\/[^\s，。；,;)）]*)?)/i.exec(steps);
+      if (d) u = [null, 'https://' + d[1]];
+    }
+    if (u) {
+      actions.push('<a class="btn on sheet-link" href="' + esc(u[1] || u[0]) +
+        '" target="_blank" rel="noopener">打开投递页 ↗</a>');
+    }
+
+    // 3. 公众号 → 告诉用户去哪搜
+    if (type === 'wechat' || /公众号/.test(steps)) {
+      actions.push('<button class="btn on" id="sheetCopy">复制公众号名</button>');
+      notes.push('在微信「搜一搜」里粘贴这个公众号名，进去找校园招聘菜单。');
+    }
+
+    // 4. 都没有 → 给搜索建议，别让用户空手而归
+    if (!actions.length) {
+      actions.push('<button class="btn on" id="sheetCopy">复制关键词</button>');
+      notes.push('路径里没有网址。建议直接在浏览器搜「' + company + ' 校招官网」，' +
+        '或在小红书/牛客搜公司名找投递入口。');
+    }
+
+    var body =
+      '<p class="sheet-body">' + esc(steps) + '</p>' +
+      (notes.length ? '<p class="sheet-note">' + notes.map(esc).join('<br>') + '</p>' : '');
+
+    return { body: body, actions: actions.join('') };
+  }
+
   function bindStepButtons(root) {
     Array.prototype.forEach.call(root.querySelectorAll('[data-steps]'), function (b) {
       b.addEventListener('click', function (e) {
         e.preventDefault();
         e.stopPropagation();
-        showSteps(b.getAttribute('data-steps'));
+        openSteps({
+          steps: b.getAttribute('data-steps'),
+          company: b.getAttribute('data-company'),
+          title: b.getAttribute('data-title'),
+          type: b.getAttribute('data-type') || '',
+        });
       });
     });
   }
 
   var STEPS_OVERLAY = null;
 
-  function showSteps(text) {
+  function openSteps(info) {
     closeSteps();
+    var built = buildStepsPanel(info.steps, info.company, info.title, info.type);
+
     var ov = document.createElement('div');
     ov.className = 'overlay';
     ov.innerHTML =
       '<div class="sheet" role="dialog">' +
-        '<h3>投递路径</h3>' +
-        '<p class="sheet-body">' + esc(text) + '</p>' +
-        '<div class="sheet-actions">' +
-          '<button class="btn on" id="sheetCopy">复制</button>' +
+        '<h3>怎么投 · ' + esc(info.company) + '</h3>' +
+        (info.title ? '<p class="sheet-sub">' + esc(info.title) + '</p>' : '') +
+        built.body +
+        '<div class="sheet-actions">' + built.actions + '</div>' +
+        '<div class="sheet-actions" style="margin-top:8px">' +
           '<button class="btn" id="sheetClose">关闭</button>' +
         '</div>' +
       '</div>';
     document.body.appendChild(ov);
     STEPS_OVERLAY = ov;
 
-    ov.addEventListener('click', function (e) {
-      if (e.target === ov) closeSteps();      // 点遮罩关掉
-    });
+    // 复制的到底是哪个字符串，取决于上面给了什么动作
+    var copyBtn = ov.querySelector('#sheetCopy');
+    if (copyBtn) {
+      var target = /公众号/.test(built.body)
+        ? (/[「"“]([^」"”]{2,20})[」"”]/.exec(info.steps) || [null, info.company])[1]
+        : info.company + ' ' + (info.title || '') + ' 校招';
+      copyBtn.addEventListener('click', function () {
+        var btn = copyBtn;
+        var done = function () {
+          btn.textContent = '✓ 已复制';
+          setTimeout(function () { btn.textContent = copyBtn.dataset.label || '已复制'; }, 1400);
+        };
+        copyBtn.dataset.label = copyBtn.textContent;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(target).then(done)
+            .catch(function () { fallbackCopy(target, done); });
+        } else {
+          fallbackCopy(target, done);
+        }
+      });
+    }
+
+    ov.addEventListener('click', function (e) { if (e.target === ov) closeSteps(); });
     ov.querySelector('#sheetClose').addEventListener('click', closeSteps);
-    ov.querySelector('#sheetCopy').addEventListener('click', function () {
-      var btn = this;
-      var done = function () {
-        btn.textContent = '✓ 已复制';
-        setTimeout(closeSteps, 700);
-      };
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
-      } else {
-        fallbackCopy(text, done);
-      }
-    });
     document.addEventListener('keydown', escClose);
   }
 
@@ -812,8 +863,11 @@
         : (job.channel_url
             ? '<a class="ch" href="' + esc(job.channel_url) + '" target="_blank" rel="noopener">↗ 链接</a>'
             : (job.channel_steps
-                ? '<button class="ch ch-steps" data-steps="' + esc(job.channel_steps) + '">' +
-                  esc(CH_LABEL[job.channel_type] || '路径') + '<i class="caret">▾</i></button>'
+                ? '<button class="ch ch-steps" data-steps="' + esc(job.channel_steps) +
+                  '" data-company="' + esc(job.company) +
+                  '" data-type="' + esc(job.channel_type || '') +
+                  '" data-title="' + esc((job.positions || [])[0] || job.title || '') + '">' +
+                  esc(CH_LABEL[job.channel_type] || '怎么投') + '<i class="caret">▾</i></button>'
                 : ''));
 
       return '<tr class="' + cls.trim() + '">' +

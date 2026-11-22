@@ -482,9 +482,11 @@
     if (isTable) {
       tableWrap.innerHTML = renderTable(jobs);
       bindCopyButtons(tableWrap);
+      bindStepButtons(tableWrap);
     } else {
       list.innerHTML = jobs.map(renderCard).join('');
       bindCopyButtons(list);
+      bindStepButtons(list);
       bindStarButtons(list);
     }
 
@@ -536,10 +538,75 @@
         '" target="_blank" rel="noopener">↗ ' + (CH_LABEL[t] || '链接') + '</a>';
     }
     if (job.channel_steps) {
-      return '<span class="ch ch-text" title="' + esc(job.channel_steps) + '">' +
-        esc(t === 'wechat' ? '公众号' : '投递路径') + '</span>';
+      // 投递路径很长（"关注公众号 → 菜单 → 投递"），放不进卡片。
+      // 原先只是个带 title 的 span，只有鼠标悬停才看得到 ——
+      // 手机上根本没有悬停，等于看不到。改成点击弹出完整路径。
+      return '<button class="ch ch-steps" data-steps="' + esc(job.channel_steps) +
+        '">' +
+        esc(t === 'wechat' ? '公众号' : '投递路径') +
+        '<i class="caret">▾</i></button>';
     }
     return '';
+  }
+
+  // 点击「投递路径」弹出完整文字，可一键复制
+  function bindStepButtons(root) {
+    Array.prototype.forEach.call(root.querySelectorAll('[data-steps]'), function (b) {
+      b.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        showSteps(b.getAttribute('data-steps'));
+      });
+    });
+  }
+
+  var STEPS_OVERLAY = null;
+
+  function showSteps(text) {
+    closeSteps();
+    var ov = document.createElement('div');
+    ov.className = 'overlay';
+    ov.innerHTML =
+      '<div class="sheet" role="dialog">' +
+        '<h3>投递路径</h3>' +
+        '<p class="sheet-body">' + esc(text) + '</p>' +
+        '<div class="sheet-actions">' +
+          '<button class="btn on" id="sheetCopy">复制</button>' +
+          '<button class="btn" id="sheetClose">关闭</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    STEPS_OVERLAY = ov;
+
+    ov.addEventListener('click', function (e) {
+      if (e.target === ov) closeSteps();      // 点遮罩关掉
+    });
+    ov.querySelector('#sheetClose').addEventListener('click', closeSteps);
+    ov.querySelector('#sheetCopy').addEventListener('click', function () {
+      var btn = this;
+      var done = function () {
+        btn.textContent = '✓ 已复制';
+        setTimeout(closeSteps, 700);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function () { fallbackCopy(text, done); });
+      } else {
+        fallbackCopy(text, done);
+      }
+    });
+    document.addEventListener('keydown', escClose);
+  }
+
+  function escClose(e) {
+    if (e.key === 'Escape') closeSteps();
+  }
+
+  function closeSteps() {
+    if (STEPS_OVERLAY) {
+      STEPS_OVERLAY.remove();
+      STEPS_OVERLAY = null;
+    }
+    document.removeEventListener('keydown', escClose);
   }
 
   function bindCopyButtons(root) {
@@ -745,8 +812,8 @@
         : (job.channel_url
             ? '<a class="ch" href="' + esc(job.channel_url) + '" target="_blank" rel="noopener">↗ 链接</a>'
             : (job.channel_steps
-                ? '<span class="ch ch-text" title="' + esc(job.channel_steps) + '">' +
-                  esc(CH_LABEL[job.channel_type] || '路径') + '</span>'
+                ? '<button class="ch ch-steps" data-steps="' + esc(job.channel_steps) + '">' +
+                  esc(CH_LABEL[job.channel_type] || '路径') + '<i class="caret">▾</i></button>'
                 : ''));
 
       return '<tr class="' + cls.trim() + '">' +
@@ -865,6 +932,15 @@
     el('p-cities').value = (P.cities || []).join(', ');
     el('p-dirs').value = (P.directions || []).join(', ');
     el('p-batch').value = P.batch || '';
+    // 明确告诉用户「现在是空的」还是「已保存」。
+    // 光靠 placeholder 会让人以为那是已经填好的值。
+    var st = el('profileState');
+    if (st) {
+      var empty = !(P.majors || []).length && !(P.cities || []).length &&
+                  !(P.directions || []).length;
+      st.textContent = empty ? '（还没填）' : '（已保存，只在这台设备）';
+      st.style.color = empty ? 'var(--warn)' : 'var(--ok)';
+    }
   }
 
   function readProfileForm() {

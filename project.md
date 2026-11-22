@@ -3,60 +3,96 @@
 > **一句话目标**：把纸团那个 ¥118 的「校招数据看板」做成自己/同学能用的免费版。
 > 核心杠杆不是复刻界面，而是**用模型顶掉它「雇人读公告→手填表」的那段成本**。
 
-最后更新：**2026-11-22**（第四轮：接入阿里云百炼，真模型端到端跑通）
+最后更新：**2026-11-22（第六轮结束，已上线）**
+
+> **线上地址**：https://la1379.github.io/campus-board/
+> **仓库**：https://github.com/la1379/campus-board （public）
 
 ---
 
 ## 一、现在是什么状态（下次开工先读这段）
 
-**核心链路已全部打通并验证。** 唯一没做的是「给别人看」——`dist/` 生成了但还没上传。
+**已上线，同学可以用了。** 剩下的都是数据质量和细节问题，不是功能缺失。
 
 | 组件 | 状态 | 怎么验 |
 |---|---|---|
-| 看板 | ✅ 完成（1458 条，匹配度排序/**城市多选**） | `npm start` → http://127.0.0.1:7788 |
-| 粘贴录入器 | ✅ 真模型已验通 + **清单批量模式** | `npm run test:intake` |
-| 清单批量录入 | ✅ 规则解析（零 token）/ 模型兜底 / 勾选保存 | 见「清单模式」一节 |
-| **Excel 导入** | ✅ 命令行 + 网页后台，列序无关、幂等 | `npm run import -- 表.xlsx` 或 `/admin.html` |
-| 模型接入 | ✅ 阿里云百炼 `qwen-plus`，key 在 `.env.local` | `/api/health` → `llm:"configured"` |
-| 京东采集器 | ✅ 353 条，已并入主数据 | `npm run collect:jd` |
-| 腾讯采集器 | ✅ 1007 条，已并入主数据（比京东瘦） | `npm run collect:qq` |
-| 合并入库 | ✅ 幂等，重跑不翻倍 | `npm run collect:all` 连跑两次看总数不变 |
-| AI 选岗打分 | ✅ 可解释，关键词打分不调模型 | 看板点「我的档案」改条件 |
-| 静态发布 | ✅ `dist/` 已生成，**待上传** | `npm run publish` |
+| 线上看板 | ✅ **已部署**，1458 条 | https://la1379.github.io/campus-board/ |
+| 本地看板 | ✅ 功能完整 | `npm start` → http://127.0.0.1:7788 |
+| 粘贴录入器 | ✅ 真模型已验通（qwen-plus） | `npm run test:intake`（零 token） |
+| 清单批量录入 | ✅ 规则解析 / 模型兜底 / 勾选保存 | `/intake.html` 切「盘点清单」 |
+| Excel 导入 | ✅ 列序无关、幂等、脚注过滤 | `/admin.html` 或 `npm run import` |
+| 京东采集器 | ✅ 353 条 | `npm run collect:jd` |
+| 腾讯采集器 | ✅ 1007 条 | `npm run collect:qq` |
+| AI 选岗打分 | ✅ 可解释，档案存本机 | 看板点「我的档案」 |
+| 城市多选 | ✅ OR 逻辑 + 搜索 + 全选可见 | 工具栏「全部城市」 |
+| 投递路径弹层 | ✅ 给可执行动作，不是干复制 | 点卡片「怎么投」 |
+| 双击脚本 | ✅ `打开后台.bat` / `发布.bat` | — |
 | 浏览器插件 | ❌ 没做 | — |
-| 截止日补全 | ❌ 没做（最大信息缺口） | — |
-| 图片抽取 | ⚠️ 代码已支持，**未配视觉模型** | 见下方说明 |
+| 截止日补全 | ❌ 1360 条仍缺（最大信息缺口） | — |
 
-### 模型配置（2026-11-22 起）
-
-用的是**阿里云百炼**，不是 DeepSeek。`.env.local` 由 `node scripts/import-key.mjs` 从 cc-switch 导入：
+### 每天更新的完整流程
 
 ```
-LLM_API_KEY=sk-ws-…（117 字符，DashScope）
+双击「打开后台.bat」→ 拖 Excel → 勾「直接写入」
+                                    ↓
+                            双击「发布.bat」
+                                    ↓
+                       30 秒后同学刷新就是新的
+```
+
+命令行等价：`npm start` → `npm run deploy`
+
+### 模型配置
+
+阿里云百炼 `qwen-plus`（不是 DeepSeek），key 在 `.env.local`（已 gitignore）。
+
+```
+LLM_API_KEY=sk-ws-…
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen-plus
 # LLM_VISION_MODEL=qwen-vl-max     ← 取消注释才能抽图片
 ```
 
-> ⚠️ **token 配额有限，省着用。** `test:real` 跑一次约 1.5 万 token，
-> 只在换模型/改 prompt/改 `normalize()` 时才跑。日常回归用 `test:intake`（假模型，零消耗）。
-
-> ⚠️ **`qwen-plus` 不能识图**。传截图会返回 400 + 人话提示。要抽长图就配
-> `LLM_VISION_MODEL=qwen-vl-max`（会额外消耗配额）。目前录入器只能贴文字。
+> ⚠️ token 配额有限。`test:real` 跑一次约 1.5 万 token，只在改 prompt/换模型时跑。
+> `test:intake` 用假模型，**零消耗**，日常回归跑它就够。
 
 **立刻能跑的命令：**
 ```bash
-cd C:\Users\21952\Desktop\p着玩\bro问我校招看板
-npm start                              # 看板 http://127.0.0.1:7788
+npm start                              # 本地看板
+npm run deploy                         # 生成 + 发布到 GitHub Pages
+npm run publish                        # 只生成 dist/ 不发布
 npm run collect:all                    # 两家一起抓 + 合并（幂等）
-npm run publish                        # 生成 dist/ 静态站
-npm run test:intake                    # 53 项端到端断言（假模型，零 token）
-npm run test:real                      # 真模型质量测试（耗 ~1.5万 token）
-npm run fake-llm                       # 单起假模型服务，手动点录音器用
-npm run verify                         # 迁移 21 项 + 两组采集自检
+npm run import -- 表.xlsx               # Excel 预览
+npm run import -- 表.xlsx --save        # Excel 写入
+npm run test:intake                    # 53 项端到端（假模型，零 token）
+npm run test:real                      # 真模型质量（耗 token）
+npm run verify                         # 迁移 21 项 + 采集自检
 npm run verify:api                     # 11 项 API 断言（需先 npm start）
-node scripts/import-key.mjs            # 从 cc-switch 导入 key（打印掩码）
 ```
+
+---
+
+## 一之二、部署架构（2026-11-22 上线）
+
+| 项 | 值 |
+|---|---|
+| 托管 | GitHub Pages（免费） |
+| 仓库 | `la1379/campus-board`，**public** |
+| 分支 | `gh-pages`（每次 deploy 强制覆盖） |
+| 产物 | `dist/`，1.2MB 单页，数据内联 |
+| 生效延迟 | 30 秒 ~ 1 分钟（CDN） |
+
+**为什么是 GitHub Pages 而不是 Cloudflare**：本机网络实测 `pages.dev` 通、
+`workers.dev`/`vercel.app` 超时；而 GitHub 是唯一**已经登录好、可以直接操作**的平台。
+Cloudflare 需要你在浏览器里授权 wrangler 登录，多一道手动步骤。
+
+**免费账户的私有仓库不能开 Pages**，所以仓库是 public 的。已确认公开安全：
+无姓名、无 API key（`.env.local` 已忽略）、发布时档案清空。
+
+**静态版的限制**（页面页脚也写着）：
+- 只读：能筛、能搜、能打自己的星标，不能录入或改数据
+- 星标存各自浏览器的 localStorage，同学之间不共享
+- 没有「录入/导入」入口（`publish.mjs` 会把它们从 HTML 里删掉，避免点了 404）
 
 ### 录入器怎么测（三种测法，覆盖不同深度）
 
@@ -86,7 +122,7 @@ node scripts/import-key.mjs            # 从 cc-switch 导入 key（打印掩码
 
 ---
 
-## 一之二、数据从哪来（2026-11-22 决定的方向）
+## 一之三、数据从哪来（2026-11-22 决定的方向）
 
 **问题**：1458 条看着多，但**只覆盖 99 家公司，京东+腾讯占 96%**。
 真正「供应链/工业工程对口 + 你能投」的只有约 20 条真实企业公告。
@@ -222,40 +258,40 @@ python -X utf8 scripts/import-xlsx.py 表.xlsx --save --default-city 杭州
 
 ## 二、下次第一件事（按优先级）
 
-### ① 把 dist/ 传上 Cloudflare Pages
+### ① 补真实投递链接（**最有价值的一件**）
 
-`dist/` 已经生成好（1458 条，1.2MB，单文件即可跑）。
-实测只有 `pages.dev` 和 `github.io` 通，`workers.dev`/`vercel.app`/`supabase.co` 全超时。
+现在点「怎么投」弹层，很多时候只能给出「复制关键词 + 你自己去搜」的指引。
+因为那 98 条手工记录的 `channel_steps` 本来就只是描述，不是投递入口：
 
-做法：Cloudflare Dashboard → Workers & Pages → Create → Pages → Upload assets → 拖 `dist/` 进去。
-或者装 `wrangler` 执行 `wrangler pages deploy dist`。
-
-> 数据更新后：`npm run publish` 重新生成，再传一次。没有 CI，是手动的。
-
-### ② 配视觉模型（如果确实要抽长图）
-
-现在只能用文字。要抽截图，在 `.env.local` 取消注释：
 ```
-LLM_VISION_MODEL=qwen-vl-max
+九阳股份    → channel_steps: "九阳校招官网"      ← 只是个名字
+吉利控股    → channel_steps: "吉利校招官网"      ← 同上
+古茗        → channel_steps: "古茗招聘公众号"    ← 只能复制公众号名
 ```
-重启即可。**会额外消耗配额**，按需开。不配也能用 —— 录入器会明说「请贴文字」。
 
-### ③ 采集数据缺截止日（最大的信息缺口）
+京东/腾讯那 1360 条反而是有真实链接的（`channel_url` 指向官网）。
+
+**做法**：Excel 里加一列「投递链接」，`import-xlsx.py` 已经能识别这一列
+（`channel_url` 候选词含「投递链接 / 网申链接 / 链接 / 网申地址 / url / 网址」）。
+导入后卡片上就直接是「↗ 网申链接」，不用再点弹层。
+
+### ② 采集数据缺截止日（最大的信息缺口）
 
 京东、腾讯接口**都不返回截止日**。主数据里 1360 条采集记录 `deadline_kind=unknown`。
-所以现在看板里它们的「剩余天数」是空的，只能按匹配度挑，没法按紧急度挑。
+所以看板里它们的「剩余天数」是空的，只能按匹配度挑，没法按紧急度挑。
 
 三条路，按性价比排序：
 1. **只在看板上标「官网为准」**（已做）—— 零成本，接受信息不完整
 2. **用录入器手工补重点岗位**（几十条）—— 人工可控
 3. **抓企业校招公众号/官网公告页**—— 工作量最大，且很多要登登录墙
 
-### ④ 旧 98 条的手填字段没补
+### ③ 配视觉模型（如果确实要抽长图）
 
-`positions/majors/work_content` 仍是空的（迁移时刻意不猜）。这些是供应链对口的岗位，
-值得批过一次模型补全。用 `/api/extract` 批量喂标题+备注即可。
-
----
+现在只能用文字。要抽截图，在 `.env.local` 取消注释：
+```
+LLM_VISION_MODEL=qwen-vl-max
+```
+重启即可。**会额外消耗配额**，按需开。不配也能用 —— 录入器会明说「请贴文字」。
 
 ## 三、纸团逆向调研结论（省你重新查）
 
@@ -424,21 +460,25 @@ data/profile.json     个人档案（选岗打分依据，改这里分数就变�
 ```
 bro问我校招看板/
 ├── project.md            ← 本文件，记忆中枢
+├── README.md             面向同学/公开的说明（仓库首页）
+├── 打开后台.bat           双击：启动本地服务并打开导入页
+├── 发布.bat              双击：生成 + 推送到 GitHub Pages
 ├── package.json          npm scripts（无依赖）
 ├── .gitignore            忽略 .env.local / data/backups / dist
 ├── index.html            看板页（含个人档案面板）
-├── app.js                看板逻辑（筛选/双视图/星标/复制邮箱/匹配度打分）
-├── style.css             样式（明暗双主题 + 匹配度徽章）
-├── intake.html           录入器页
+├── app.js                看板逻辑（筛选/双视图/星标/匹配度/投递弹层）
+├── style.css             样式（明暗双主题 + 匹配度徽章 + 弹层）
+├── intake.html           录入器页（单篇 / 清单两种模式）
 ├── intake.js             录入器逻辑
 ├── admin.html            后台：Excel 批量导入
-├── server.mjs            本地服务 + /api/extract /api/jobs
+├── server.mjs            本地服务 + /api/extract /api/jobs /api/import-xlsx
 ├── data/
 │   ├── jobs.json         ← 唯一数据源，1458 条
 │   ├── seed.json         迁移快照备份
-│   ├── profile.json      个人档案（选岗打分依据）
+│   ├── profile.json      个人档案（选岗打分依据，发布时清空）
 │   ├── jd-raw.json       京东 353 条原始采集
 │   ├── qq-raw.json       腾讯 1007 条原始采集
+│   ├── 样例-导入模板.xlsx  Excel 格式参考
 │   └── backups/          合并前快照（git 忽略）
 ├── dist/                 静态发布产物（git 忽略，npm run publish 生成）
 └── scripts/
@@ -447,7 +487,9 @@ bro问我校招看板/
     ├── collect-jd.mjs    京东采集器
     ├── collect-qq.mjs    腾讯采集器
     ├── lib-store.mjs     共享入库逻辑（幂等合并 + 备份 + 空值不覆盖）
-    ├── publish.mjs       数据烤进 HTML → dist/
+    ├── publish.mjs       数据烤进 HTML → dist/（--blank-profile 清空档案）
+    ├── deploy.mjs        发布到 GitHub Pages（临时仓库方式）
+    ├── DEPLOY.md         部署步骤说明
     ├── import-key.mjs    从 cc-switch 导入 key 到 .env.local（只打印掩码）
     ├── ingest-text.mjs   把页面文字/文件喂进抽取管道（默认预览，--save 落库）
     ├── import-xlsx.py    Excel 导入（列序无关、表头别名、幂等、脚注过滤）
@@ -457,6 +499,20 @@ bro问我校招看板/
     ├── verify_collect.py 采集自检（通用，任何公司都能跑）
     └── verify_api.py     11 项 API 断言（部分更新不能丢字段）
 ```
+
+### 数据源与部署的关系
+
+```
+本地（有服务）                 GitHub Pages（静态，只读）
+─────────────                ────────────────────
+data/jobs.json  ← 唯一真实数据
+      │
+      ├─ npm start ──→ localhost:7788（全功能：录入/导入/采集）
+      │
+      └─ npm run deploy ──→ dist/index.html（数据内联）──→ 同学看到的网页
+```
+
+**只在本地改数据，deploy 只是把快照推上去。** 同学那边没有任何写入能力。
 
 ---
 
@@ -478,7 +534,12 @@ bro问我校招看板/
 | 录入器界面（浏览器实测） | 全字段填充、双警告同时显示、保存跳转正常 | 2026-11-22 |
 | 录入器缺 key | HTTP 503 + 人话错误 | 2026-11-22 |
 | **录入器（真模型 qwen-plus）** | **PASS 17/17**，3 条真实风格公告，平均 4.9s/条 | 2026-11-22 |
-| 手机端布局 | 未实测 | — |
+| **线上站（GitHub Pages）** | HTTP 200，1458 条，档案已清空，后台入口已剥离 | 2026-11-22 |
+| 投递弹层（线上实测） | 九阳→复制关键词+搜索指引；古茗→复制公众号名+微信指引 | 2026-11-22 |
+| 空档案状态 | 不显示分数徽章、统计条显示「?」、引导条弹出 | 2026-11-22 |
+| 档案面板 | 输入框为空、placeholder 带「例如：」、状态标「（还没填）」 | 2026-11-22 |
+| 缓存失效 | 发布后 `app.js?v=` 版本号变化，线上拿到新版 | 2026-11-22 |
+| 手机端布局 | 未真机实测 | — |
 
 ---
 
@@ -486,15 +547,90 @@ bro问我校招看板/
 
 **下次按这个顺序做：**
 
-- [ ] **传 dist/ 到 Cloudflare Pages**（产物已就绪，只差上传）
+- [ ] **给那 98 条手工记录补真实投递链接**（Excel 加「投递链接」列即可，导入器已支持）
 - [ ] 等 DSH 导出一批新 Excel，走一次完整导入
-- [ ] 给重点岗位补截止日（旧 98 条已由 Excel 补齐部分；京东/腾讯 1360 条仍缺）
-- [ ] 旧 98 条补 `positions/majors/work_content`（批一次模型，注意配额）
+- [ ] 给重点岗位补截止日（京东/腾讯 1360 条仍全缺）
 - [ ] 要抽长图时配 `LLM_VISION_MODEL=qwen-vl-max`
 - [ ] 浏览器插件（Chrome MV3，把公众号/小红书正文推进 `/api/extract`）
-- [ ] 手机端实测（看板已在 640px 断点做了适配，但没真机验证）
-- [ ] 匹配度加权可调（现在权重在 `profile.json` 的 `_weights`，界面不能改）
+- [ ] 手机端真机走一遍（投递弹层、城市多选、档案面板）
+- [ ] 匹配度加权可调（现在权重写死在 `profile.json` 的 `_weights`，界面不能改）
 - [ ] 已知小瑕疵：`majors` 会带尾巴（"机械类相关专业"而非"机械"），不影响匹配
+
+---
+
+## 十一、这一轮修掉的坑（2026-11-22 下午）
+
+### 1. 空档案显示虚假匹配度
+
+**症状**：同学第一次打开（档案空），岗位显示 30%~40% 的匹配度。
+
+**原因**：「专业不限」直接给满 40 分、「全国招聘」直接给满 30 分。这些分不是「适合他」，
+只是「谁都能投」。空档案时这些分毫无意义，还会误导排序。
+
+**修法**：没填档案的维度直接不计分、不算命中；三个维度全空时直接返回 0 分，
+并且不显示徽章、统计条改显示「? 点我的档案算匹配」、弹引导条。
+
+> **教训**：这个 bug 一直没被发现，因为我一直用自己的档案测试。
+> **空状态和默认值是最容易漏测的地方**——而它恰好是新用户唯一的路径。
+
+### 2. 投递路径只是个 `<span>`，点了没反应
+
+**症状**：卡片上「投递路径」看着像按钮，点了什么都没发生。
+
+**原因**：它是 `<span class="ch ch-text">`，只在 `title` 属性里存了完整文字，
+**只有鼠标悬停才看得到**。手机上没有悬停，等于这个功能不存在。
+
+**修法**：改成 `<button>` + 点击弹层。
+
+### 3. 弹层里的「复制」只复制一个名字
+
+**症状**：点「复制」，剪贴板里是「九阳校招官网」这种名字，粘贴出来毫无用处。
+
+**修法**：按内容类型给**可执行动作**：
+- 路径里有网址 → 「打开投递页 ↗」直接跳转
+- 是公众号 → 「复制公众号名」+ 提示去微信搜一搜
+- 都没有 → 「复制关键词」+ 提示用浏览器/小红书搜公司名
+
+### 4. GitHub Pages 缓存导致线上不更新
+
+**症状**：改完代码部署了，线上还是旧的；刷新也没用。
+
+**原因**：GitHub Pages 对静态文件缓存约 10 分钟，`app.js` 文件名不变就拿缓存版。
+
+**修法**：`publish.mjs` 给 `app.js` / `style.css` 加时间戳版本号（`app.js?v=202611221106`），
+URL 变了缓存自然失效。
+
+> **教训**：判断这类问题的关键是**对比「文件内容」和「页面实际用的 DOM」**。
+> 我一开始 `fetch('app.js')` 看到是新版就被骗了 —— 那是重新请求的结果，
+> 而页面真正执行的是缓存副本。
+
+### 5. 部署脚本在中文路径下反复失败
+
+**症状**：`git worktree add --orphan` 在项目目录里建临时工作树，Windows 下
+`git -C "<中文路径>"` 解析错、orphan 分支空 ref 推不上去、worktree 目录占着删不掉。
+
+**修法**：改成在**系统临时目录**（纯英文路径）建一个独立 git 仓库来发布。
+不碰主仓库工作树，绕开全部三个问题。
+
+### 6. 测试静默连上真模型
+
+**症状**：`test:intake` 53 项全挂，返回 `not_a_job_posting`。
+
+**原因**：测试传 `DEEPSEEK_*` 环境变量，但 `server.mjs` 已改成读 `LLM_*`，
+兜底逻辑捡到了 `.env.local` 里的真 key —— **测试在悄悄消耗 token 配额**。
+
+**修法**：测试里显式清空 `DEEPSEEK_*`，防止任何兜底路径捡到真 key。
+
+> **教训**：`A || B` 这种兜底写法让「没配 A」不会失败，只会静默退化到 B。
+> 测试看起来在跑、其实跑的是另一条路。防法是**显式清空每个兜底**，而不是指望它不触发。
+
+### 7. 测试清理顺序错，测试数据进正式库
+
+**症状**：跑完测试，`jobs.json` 里多了几条测试记录。
+
+**原因**：`finally` 里先 `child.kill()` 停服务，再删记录 —— 服务停了就删不了。
+
+**修法**：改成先删记录再停服务。验证：1458 → 跑完整套 → 1458。
 
 ---
 
@@ -553,3 +689,16 @@ bro问我校招看板/
   - 旧数据 `positions` 从 0/98 补到 98/98，`note` 同样补满，星标 19→20
   - 修 3 个「看起来成功」的 bug：脚注被当公司、同公司多行串数据、幂等键对不上
   - 顺带支持 URL 筛选参数（`/?state=star`），静态版自动剥离后台入口
+
+- **2026-11-22 第七轮：上线 + 修交互**
+  - **上线 GitHub Pages**：https://la1379.github.io/campus-board/
+    - 仓库 `la1379/campus-board` 设为 public（免费账户的私有仓库开不了 Pages）
+    - `scripts/deploy.mjs` 重写：在系统临时目录建独立仓库发布，绕开中文路径问题
+    - 加双击脚本：`打开后台.bat` / `发布.bat`
+    - README.md 面向同学写清楚「这是什么、怎么用」
+  - **发布时清空个人档案**（`publish --blank-profile`）：不公开求职画像
+  - **修空档案显示虚假匹配度**：专业不限/全国招聘不再无条件给满分
+  - **修投递路径是死 span**：改成可点击弹层
+  - **弹层改为可执行动作**：有网址给跳转、公众号给复制名+指引、都没有给搜索建议
+  - **修 GitHub Pages 缓存**：`app.js`/`style.css` 加时间戳版本号
+  - 数据 1458 条，星标 20，全部测试通过（53/21/11）

@@ -78,6 +78,13 @@ function patchFooter(html) {
 }
 
 function patchVersion(html, stamp) {
+  // 给 app.js / style.css 加内容指纹，避免浏览器/CDN 拿旧版。
+  // GitHub Pages 对静态文件默认缓存 10 分钟，改完代码同学看到的可能还是旧的 ——
+  // 加版本号后 URL 变了，缓存自然失效。
+  const key = String(stamp).replace(/[^0-9]/g, '').slice(0, 12);
+  html = html.replace(/(<script src=")app\.js(")/, '$1app.js?v=' + key + '$2');
+  html = html.replace(/(<link rel="stylesheet" href=")style\.css(")/,
+    '$1style.css?v=' + key + '$2');
   return html.replace(/<title>校招看板<\/title>/,
     '<title>校招看板</title>\n<meta name="generator" content="publish.mjs ' + stamp + '">');
 }

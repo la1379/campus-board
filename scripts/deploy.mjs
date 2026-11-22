@@ -1,17 +1,24 @@
 /**
  * 一键部署到 GitHub Pages。
  *
- * 做的事：publish 生成 dist/ → 推到 gh-pages 分支 → 打印网址。
- * 用 git 的 orphan 分支技巧，不改动 main 的分支历史，
- * 也不用把 dist/ 加进 .gitignore 之外的特殊配置。
+ * 做的事：publish 生成 dist/ → 推送到 gh-pages 分支 → 打印网址。
+ *
+ * 实现方式说明（踩过的坑）：
+ *   最早用 `git worktree add --orphan -b gh-pages` 建临时目录再提交推送。
+ *   在 Windows 上这条路会反复失败：
+ *     · 项目路径含中文，`git -C "<中文路径>"` 偶尔解析错
+ *     · orphan 分支在没有 commit 时没有 ref，push 报 src refspec does not match any
+ *     · worktree 目录被占用时删不掉（Device or resource busy）
+ *   现在改成：**用一个独立的临时 git 仓库**（git init 在系统临时目录），
+ *   从那里 force push 到 gh-pages。路径全英文，不碰主仓库的工作树。
  *
  * 用法：
  *   node scripts/deploy.mjs                  → 生成并推送
  *   node scripts/deploy.mjs --dry-run        → 只生成，不推送
- *   node scripts/deploy.mjs --repo owner/name → 首次自动建仓库并配置
  */
-import { execFileSync, execSync } from 'node:child_process';
+import { execSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,23 +28,16 @@ const DIST = path.join(ROOT, 'dist');
 
 const args = process.argv.slice(2);
 const DRY = args.includes('--dry-run');
-const repoArg = args.includes('--repo') ? args[args.indexOf('--repo') + 1] : '';
 
-function run(cmd, opts = {}) {
-  return execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: opts.quiet ? 'pipe' : 'inherit', ...opts });
+function sh(cmd, cwd, opts = {}) {
+  return execSync(cmd, { cwd, encoding: 'utf8', stdio: opts.quiet ? 'pipe' : 'inherit', ...opts });
 }
-
-function capture(cmd) {
+function cap(cmd, cwd) {
   try {
-    return execFileSync(cmd, { cwd: ROOT, shell: true, encoding: 'utf8' }).trim();
+    return execSync(cmd, { cwd, shell: true, encoding: 'utf8' }).trim();
   } catch {
     return '';
   }
-}
-
-function has(cmd) {
-  try { execFileSync(cmd, ['--version'], { stdio: 'ignore' }); return true; }
-  catch { return false; }
 }
 
 console.log('');
@@ -46,9 +46,7 @@ console.log('');
 
 // ---------- 1. 生成 dist ----------
 console.log('  [1/4] 生成静态站…');
-// 发布版清空个人档案：不把「谁在找工作/什么专业/想去哪」内联进公开网页。
-// 同学打开自己填就行，功能不受影响。
-run('node scripts/publish.mjs --blank-profile', { stdio: 'inherit' });
+sh('node scripts/publish.mjs --blank-profile', ROOT);
 if (!fs.existsSync(path.join(DIST, 'index.html'))) {
   console.error('X dist/index.html 没生成，停下');
   process.exit(1);
@@ -61,27 +59,17 @@ if (DRY) {
   process.exit(0);
 }
 
-// ---------- 2. 检查 git 与远端 ----------
+// ---------- 2. 从主仓库读远端 ----------
 console.log('');
-console.log('  [2/4] 检查 git…');
+console.log('  [2/4] 检查远端…');
 
-const isRepo = capture('git rev-parse --is-inside-work-tree') === 'true';
+const isRepo = cap('git rev-parse --is-inside-work-tree', ROOT) === 'true';
 if (!isRepo) {
-  console.error('X 还没初始化 git。先跑一次：');
-  console.error('    git init && git add . && git commit -m "init"');
-  console.error('    git branch -M main');
-  console.error('    git remote add origin git@github.com:<你>/<仓库>.git');
-  console.error('    git push -u origin main');
-  console.error('  详细步骤见 scripts/DEPLOY.md');
+  console.error('X 还没初始化 git。步骤见 scripts/DEPLOY.md');
   process.exit(1);
 }
 
-let remote = capture('git remote get-url origin');
-if (!remote && repoArg && has('gh')) {
-  console.log('  没配 origin，按 --repo 创建…');
-  run(`gh repo create ${repoArg} --public --source=. --remote=origin --push`, { stdio: 'inherit' });
-  remote = capture('git remote get-url origin');
-}
+const remote = cap('git remote get-url origin', ROOT);
 if (!remote) {
   console.error('X 没有 remote origin。先配：');
   console.error('    git remote add origin git@github.com:<你>/<仓库>.git');
@@ -89,68 +77,41 @@ if (!remote) {
 }
 console.log('  origin: ' + remote);
 
-// 从 remote 推断 Pages 地址
-function pagesUrl(remote) {
-  const m = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?/.exec(remote);
-  if (!m) return '';
-  return 'https://' + m[1] + '.github.io/' + m[2] + '/';
+function pagesUrl(r) {
+  const m = /github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/.exec(r);
+  return m ? 'https://' + m[1] + '.github.io/' + m[2] + '/' : '';
 }
 const URL = pagesUrl(remote);
 
-// ---------- 3. 用工作树方式发布，不污染 main ----------
+// ---------- 3. 在系统临时目录建一个独立仓库来发布 ----------
 console.log('');
 console.log('  [3/4] 推送到 gh-pages…');
 
-// 用临时工作树把 dist/ 的内容放到 gh-pages 分支。
-// 为什么这么做：dist/ 在 .gitignore 里，直接 git add -f 会把 dist 塞进 main 历史，
-// 以后每次发布都多一份 1MB 的 HTML，仓库很快膨胀。
-// 单独分支只保留"最新一版"，历史干净。
-const WT = path.join(ROOT, '.deploy-wtmp');
-const hasGhp = capture('git ls-remote --heads origin gh-pages');
-const hasLocalGhp = capture('git branch --list gh-pages');
+// 用系统临时目录，路径保证是纯英文
+const TMP = fs.mkdtempSync(path.join(os.tmpdir(), 'cb-deploy-'));
 
 try {
-  if (fs.existsSync(WT)) fs.rmSync(WT, { recursive: true, force: true });
+  sh('git init -q', TMP, { quiet: true });
+  sh('git checkout -q -b gh-pages', TMP, { quiet: true });
 
-  if (hasGhp || hasLocalGhp) {
-    run(`git worktree add "${WT}" gh-pages`, { stdio: 'pipe' });
-  } else {
-    run(`git worktree add --orphan -b gh-pages "${WT}"`, { stdio: 'pipe' });
-  }
-
-  // 清空旧内容（保留 .git）
-  for (const name of fs.readdirSync(WT)) {
-    if (name === '.git') continue;
-    fs.rmSync(path.join(WT, name), { recursive: true, force: true });
-  }
   // 拷 dist 内容
   for (const name of fs.readdirSync(DIST)) {
-    fs.cpSync(path.join(DIST, name), path.join(WT, name), { recursive: true });
+    fs.cpSync(path.join(DIST, name), path.join(TMP, name), { recursive: true });
   }
-  // GitHub Pages 默认会跑 Jekyll，加这个文件跳过，免得下划线文件被忽略
-  fs.writeFileSync(path.join(WT, '.nojekyll'), '');
+  // 跳过 Jekyll（否则下划线开头的文件会被忽略）
+  fs.writeFileSync(path.join(TMP, '.nojekyll'), '');
 
+  sh('git add -A', TMP, { quiet: true });
   const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-  run('git add -A', { cwd: WT, stdio: 'pipe' });
-  let committed = false;
-  try {
-    execSync(`git -C "${WT}" commit -m "deploy ${stamp}"`, { stdio: 'pipe' });
-    committed = true;
-  } catch {
-    // 内容没变，没有 commit 可做 —— 不是错误
-  }
+  sh(`git -c user.name="deploy-bot" -c user.email="deploy@local" commit -q -m "deploy ${stamp}"`,
+     TMP, { quiet: true });
 
-  if (committed) {
-    run(`git -C "${WT}" push origin gh-pages --force`, { stdio: 'inherit' });
-    console.log('  已推送');
-  } else {
-    console.log('  内容没变化，跳过推送');
-  }
+  sh(`git remote add origin "${remote}"`, TMP, { quiet: true });
+  sh('git push origin gh-pages --force', TMP);
+
+  console.log('  已推送（' + fs.readdirSync(TMP).length + ' 个文件）');
 } finally {
-  try {
-    run(`git worktree remove "${WT}" --force`, { stdio: 'pipe' });
-  } catch { /* 清理失败不影响结果 */ }
-  if (fs.existsSync(WT)) fs.rmSync(WT, { recursive: true, force: true });
+  try { fs.rmSync(TMP, { recursive: true, force: true }); } catch { /* 临时目录，删不掉也无所谓 */ }
 }
 
 // ---------- 4. 提示 ----------
@@ -160,15 +121,13 @@ console.log('');
 if (URL) {
   console.log('  网址  ' + URL);
   console.log('');
-  console.log('  如果这是第一次发布，需要先在仓库里开启 Pages：');
-  console.log('    仓库 → Settings → Pages → Source 选 gh-pages 分支');
-  console.log('  或跑一次：');
-  const m = /github\.com[:/]([^/]+)\/([^/.]+)(?:\.git)?/.exec(remote);
+  const m = /github\.com[:/]([^/]+)\/([^/.]+?)(?:\.git)?$/.exec(remote);
   if (m) {
+    console.log('  第一次发布还需要开启 Pages（只需一次）：');
     console.log(`    gh api -X POST repos/${m[1]}/${m[2]}/pages -f "source[branch]=gh-pages" -f "source[path]=/"`);
   }
   console.log('');
-  console.log('  生效通常要 30 秒到 1 分钟（CDN 有缓存）。');
-  console.log('  之后每次改完数据，跑 npm run deploy 即可，同学刷新就是新的。');
+  console.log('  生效通常 30 秒到 1 分钟（CDN 有缓存）。');
+  console.log('  之后每次改完数据，npm run deploy 即可，同学刷新就是新的。');
 }
 console.log('');

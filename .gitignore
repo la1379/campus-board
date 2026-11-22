@@ -4,3 +4,5 @@ data/jobs.json.tmp
 data/backups/
 dist/
 .playwright-mcp/
+.deploy-wtmp/
+.probe/

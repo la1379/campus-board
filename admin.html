@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c22">
+<title>后台 · 数据导入</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .ad-wrap { max-width: 960px; margin: 0 auto; padding: 18px 20px 60px; }
+  .ad-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .ad-card h2 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
+  .ad-card p.hint { margin: 0 0 12px; font-size: 12px; color: var(--ink-3); line-height: 1.6; }
+
+  .dz {
+    border: 1.5px dashed var(--line); border-radius: 9px; padding: 26px 18px;
+    text-align: center; color: var(--ink-3); font-size: 13px; cursor: pointer;
+    transition: .12s;
+  }
+  .dz:hover, .dz.over { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .dz.on { border-style: solid; border-color: var(--ok); color: var(--ok); background: var(--ok-soft); }
+  .dz b { display: block; font-size: 14px; margin-bottom: 4px; color: var(--ink); }
+  .dz.on b { color: var(--ok); }
+
+  .ad-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .ad-row > label { font-size: 12px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+  .ad-row input[type=text] {
+    font: inherit; font-size: 13px; padding: 7px 10px; border-radius: 7px;
+    border: 1px solid var(--line); background: var(--bg); color: var(--ink);
+    outline: none; min-width: 180px;
+  }
+  .ad-row input[type=text]:focus { border-color: var(--accent); background: var(--card); }
+
+  .btn-primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 600; padding: 9px 20px;
+  }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+  .report {
+    background: #14151a; color: #d6d8e0; border-radius: 9px; padding: 14px;
+    font-family: ui-monospace, Consolas, "Courier New", monospace;
+    font-size: 12px; line-height: 1.55; white-space: pre; overflow: auto;
+    max-height: 460px; margin: 0;
+  }
+  @media (prefers-color-scheme: light) {
+    .report { background: #1c1d24; }
+  }
+  .report.err { color: #ff9b7a; }
+
+  .steps { font-size: 12.5px; color: var(--ink-2); line-height: 1.8; margin: 0; padding-left: 20px; }
+  .steps code {
+    background: var(--bg); padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
+  }
+  .steps b { color: var(--ink); }
+  .warn-box {
+    background: var(--warn-soft); color: var(--warn);
+    border-radius: 8px; padding: 10px 12px; font-size: 12.5px;
+    margin-top: 12px; line-height: 1.6;
+  }
+  .ok-box {
+    background: var(--ok-soft); color: var(--ok);
+    border-radius: 8px; padding: 10px 12px; font-size: 12.5px;
+    margin-top: 12px; line-height: 1.6;
+  }
+  .cols { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
+  .cols span { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 2px 7px; }
+  .cols span.req { border-color: var(--accent); color: var(--accent); }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="logo">后</span>
+      <div>
+        <h1>数据导入</h1>
+        <p class="sub">把采集好的 Excel 并进看板</p>
+      </div>
+    </div>
+    <a class="btn" href="/">← 返回看板</a>
+  </div>
+</header>
+
+<main class="ad-wrap">
+
+  <div id="msg"></div>
+
+  <!-- 第一步：说明 -->
+  <section class="ad-card">
+    <h2>① Excel 该怎么组织</h2>
+    <p class="hint">
+      <b>列序无所谓，表头名字对得上就能读。</b>「公司名称 / 公司 / 单位 / 企业」都认，
+      「工作城市 / 城市 / base」都认。多出来的列会被忽略。
+    </p>
+    <div class="cols">
+      <span class="req">公司名称 *</span>
+      <span class="req">在招岗位</span>
+      <span class="req">工作城市</span>
+      <span class="req">截止日期</span>
+      <span>专业要求</span>
+      <span>做什么</span>
+      <span>投递邮箱</span>
+      <span>投递链接</span>
+      <span>投递路径</span>
+      <span>行业</span>
+      <span>备注</span>
+      <span>来源</span>
+    </div>
+    <p class="hint" style="margin-top:12px;margin-bottom:0">
+      只有<b>公司名称</b>是硬要求。其余留空也能导入 —— 能投的公司和截止日本身就有价值。
+      截止日期支持 <code>2026-12-31</code>、<code>12月31日</code>、<code>27年3月7日</code>、
+      <code>招满即止</code> 等写法。
+    </p>
+  </section>
+
+  <!-- 第二步：上传 -->
+  <section class="ad-card">
+    <h2>② 选文件</h2>
+    <p class="hint">支持 .xlsx / .xlsm。文件只在这台机器上处理，不上传任何服务器。</p>
+
+    <div class="dz" id="dz">
+      <b id="dzTitle">点这里选 Excel，或拖进来</b>
+      <span id="dzSub">.xlsx / .xlsm</span>
+    </div>
+
+    <div class="ad-row">
+      <label>来源标记
+        <input type="text" id="source" placeholder="如：DSH 采集 2026-11-22">
+      </label>
+      <label>
+        <input type="checkbox" id="save"> 直接写入（不勾选只预览）
+      </label>
+    </div>
+
+    <div class="ad-row" style="margin-top:16px">
+      <button class="btn btn-primary" id="go" disabled>开始导入</button>
+      <button class="btn" id="clear">清空</button>
+      <span id="status" style="font-size:12px;color:var(--ink-3)"></span>
+    </div>
+
+    <div class="warn-box" style="display:none" id="warn"></div>
+    <div class="ok-box" id="okBox" style="display:none"></div>
+  </section>
+
+  <!-- 报告 -->
+  <section class="ad-card" id="reportCard" style="display:none">
+    <h2>③ 导入报告</h2>
+    <p class="hint" id="reportHint"></p>
+    <pre class="report" id="report"></pre>
+    <div class="ad-row" id="afterRow" style="display:none">
+      <a class="btn btn-primary" href="/" style="text-decoration:none">去看板确认 →</a>
+      <button class="btn" id="toStatic">说明：怎么更新线上站</button>
+    </div>
+    <div class="warn-box" id="staticTip" style="display:none">
+      线上站是静态快照，不会自己变。数据变了要重新生成再上传：<br>
+      <code>npm run publish</code> → 把 <code>dist/</code> 整个重新传到 Cloudflare Pages。
+    </div>
+  </section>
+
+  <!-- 流程说明 -->
+  <section class="ad-card">
+    <h2>完整流程</h2>
+    <ol class="steps">
+      <li><b>DSH 采集</b> → 导出 Excel（表头按上面的建议）</li>
+      <li><b>这里导入</b> → 先不勾「直接写入」，看预览对不对</li>
+      <li>确认无误 → 勾上「直接写入」再导一次（同一份表重复导不会翻倍）</li>
+      <li><b>看板确认</b> → 检查匹配度和城市筛出来的对不对</li>
+      <li><b>npm run publish</b> → 重新生成 dist/ 并上传，同学才能看到新的</li>
+    </ol>
+  </section>
+
+</main>
+
+<script>
+(function () {
+  'use strict';
+  var el = function (id) { return document.getElementById(id); };
+  var FILE = null;
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function msg(text, kind) {
+    var m = el('msg');
+    if (!text) { m.innerHTML = ''; return; }
+    m.innerHTML = '<div class="msg ' + (kind || '') + '">' + esc(text) + '</div>';
+  }
+
+  function setFile(f) {
+    if (!f) return;
+    if (!/\.(xlsx|xlsm)$/i.test(f.name)) {
+      msg('只支持 .xlsx / .xlsm，你选的是 ' + f.name, 'err');
+      return;
+    }
+    if (f.size > 50 * 1024 * 1024) {
+      msg('文件超过 50MB', 'err');
+      return;
+    }
+    FILE = f;
+    msg('');
+    var dz = el('dz');
+    dz.classList.add('on');
+    el('dzTitle').textContent = f.name;
+    el('dzSub').textContent = (f.size / 1024).toFixed(0) + ' KB';
+    el('go').disabled = false;
+    el('reportCard').style.display = 'none';
+    el('warn').style.display = 'none';
+    el('okBox').style.display = 'none';
+  }
+
+  el('dz').addEventListener('click', function () {
+    var inp = document.createElement('input');
+    inp.type = 'file';
+    inp.accept = '.xlsx,.xlsm';
+    inp.onchange = function () { setFile(inp.files[0]); };
+    inp.click();
+  });
+  ['dragenter', 'dragover'].forEach(function (ev) {
+    el('dz').addEventListener(ev, function (e) {
+      e.preventDefault(); el('dz').classList.add('over');
+    });
+  });
+  ['dragleave', 'drop'].forEach(function (ev) {
+    el('dz').addEventListener(ev, function (e) {
+      e.preventDefault(); el('dz').classList.remove('over');
+    });
+  });
+  el('dz').addEventListener('drop', function (e) {
+    if (e.dataTransfer && e.dataTransfer.files.length) setFile(e.dataTransfer.files[0]);
+  });
+
+  el('clear').addEventListener('click', function () {
+    FILE = null;
+    el('dz').classList.remove('on');
+    el('dzTitle').textContent = '点这里选 Excel，或拖进来';
+    el('dzSub').textContent = '.xlsx / .xlsm';
+    el('go').disabled = true;
+    el('reportCard').style.display = 'none';
+    el('warn').style.display = 'none';
+    el('okBox').style.display = 'none';
+    el('status').textContent = '';
+    msg('');
+  });
+
+  function readBase64(f) {
+    return new Promise(function (resolve, reject) {
+      var r = new FileReader();
+      r.onload = function () {
+        var s = String(r.result);
+        resolve(s.slice(s.indexOf(',') + 1));
+      };
+      r.onerror = reject;
+      r.readAsDataURL(f);
+    });
+  }
+
+  el('go').addEventListener('click', async function () {
+    if (!FILE) return;
+    var save = el('save').checked;
+
+    el('go').disabled = true;
+    el('go').textContent = '导入中…';
+    el('status').textContent = save ? '正在写入…' : '正在预览…';
+    msg('');
+
+    try {
+      var b64 = await readBase64(FILE);
+      var res = await fetch('/api/import-xlsx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          filename: FILE.name,
+          fileBase64: b64,
+          save: save,
+          source: el('source').value.trim(),
+        }),
+      });
+      var d = await res.json();
+
+      el('reportCard').style.display = '';
+      el('report').textContent = d.report || (d.error || '(无输出)');
+      el('report').classList.toggle('err', !d.ok);
+
+      if (!d.ok) {
+        el('reportHint').textContent = '导入失败，看下面的报错。';
+        el('warn').style.display = '';
+        el('warn').textContent = d.error || '';
+        el('afterRow').style.display = 'none';
+        msg('导入失败', 'err');
+        return;
+      }
+
+      // 从报告里抠出「新增 N 条」
+      var m = /新\s*增\s*(\d+)\s*条/.exec(d.report || '');
+      var added = m ? Number(m[1]) : null;
+
+      if (save) {
+        el('reportHint').textContent = '已写入。下面可以去看板确认。';
+        el('okBox').style.display = '';
+        el('okBox').textContent = added != null
+          ? ('写入成功：新增 ' + added + ' 条。建议去看板按「匹配度」排一下，核对抽取质量。')
+          : '写入成功。';
+        el('afterRow').style.display = '';
+        msg('导入完成', 'ok');
+      } else {
+        el('reportHint').textContent = '这是预览，还没写进数据。确认没问题后勾上「直接写入」再导一次。';
+        el('warn').style.display = '';
+        el('warn').textContent = '预览模式：数据文件没动。';
+        el('afterRow').style.display = 'none';
+        msg('预览完成', 'ok');
+      }
+    } catch (e) {
+      msg('请求失败：' + e.message, 'err');
+      el('reportCard').style.display = '';
+      el('report').textContent = e.message;
+      el('report').classList.add('err');
+    } finally {
+      el('go').disabled = false;
+      el('go').textContent = '开始导入';
+      el('status').textContent = '';
+    }
+  });
+
+  el('toStatic').addEventListener('click', function () {
+    var t = el('staticTip');
+    t.style.display = t.style.display === 'none' ? '' : 'none';
+  });
+})();
+</script>
+</body>
+</html>

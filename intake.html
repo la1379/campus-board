@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c22">
+<title>录入招聘公告</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  .in-wrap { max-width: 860px; margin: 0 auto; padding: 18px 20px 60px; }
+  .in-card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow);
+    margin-bottom: 12px;
+  }
+  .in-card h2 { margin: 0 0 4px; font-size: 14px; font-weight: 650; }
+  .in-card p.hint { margin: 0 0 10px; font-size: 12px; color: var(--ink-3); }
+  textarea {
+    width: 100%; min-height: 180px; font: inherit; font-size: 13.5px;
+    color: var(--ink); background: var(--bg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 11px; resize: vertical; outline: none;
+    line-height: 1.6;
+  }
+  textarea:focus { border-color: var(--accent); background: var(--card); }
+  .drop {
+    border: 1.5px dashed var(--line); border-radius: 8px; padding: 18px;
+    text-align: center; color: var(--ink-3); font-size: 13px; cursor: pointer;
+    transition: .12s;
+  }
+  .drop:hover, .drop.over { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .thumbs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .thumb { position: relative; width: 72px; height: 72px; border-radius: 6px; overflow: hidden; border: 1px solid var(--line); }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; }
+  .thumb button {
+    position: absolute; top: 2px; right: 2px; width: 18px; height: 18px;
+    border: none; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff;
+    font-size: 12px; line-height: 1; cursor: pointer; padding: 0;
+  }
+  .row2 { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .row2 > * { flex: 1 1 200px; }
+  input[type=text], select.in-sel {
+    font: inherit; font-size: 13px; color: var(--ink); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    outline: none; width: 100%;
+  }
+  input[type=text]:focus, select.in-sel:focus { border-color: var(--accent); background: var(--card); }
+  .btn-primary {
+    background: var(--accent); border-color: var(--accent); color: #fff;
+    font-weight: 600; padding: 10px 20px;
+  }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary:hover:not(:disabled) { filter: brightness(1.06); color: #fff; }
+  .fld { margin-bottom: 11px; }
+  .fld label { display: block; font-size: 12px; color: var(--ink-2); margin-bottom: 4px; font-weight: 500; }
+  .fld label .warn { color: var(--warn); font-weight: 400; font-size: 11px; margin-left: 6px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 11px; }
+  @media (max-width: 640px) { .grid2 { grid-template-columns: 1fr; } .in-wrap { padding: 12px 14px 50px; } }
+  .ch-tag {
+    display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 5px;
+    background: var(--ok-soft); color: var(--ok); margin-left: 6px; vertical-align: middle;
+  }
+  .ch-tag.bad { background: var(--warn-soft); color: var(--warn); }
+  .msg { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; }
+  .msg.err { background: var(--warn-soft); color: var(--warn); }
+  .msg.ok { background: var(--ok-soft); color: var(--ok); }
+  .code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+  /* ---------- 模式切换 ---------- */
+  .mode-switch { display: flex; gap: 8px; margin-bottom: 10px; }
+  .mode-opt {
+    flex: 1 1 0;
+    display: flex; gap: 8px; align-items: flex-start;
+    padding: 9px 11px; border: 1px solid var(--line); border-radius: 8px;
+    background: var(--bg); cursor: pointer; transition: .12s;
+  }
+  .mode-opt:hover { border-color: var(--accent); }
+  .mode-opt:has(input:checked) {
+    border-color: var(--accent); background: var(--accent-soft);
+  }
+  .mode-opt input { margin: 2px 0 0; flex: 0 0 auto; }
+  .mode-opt b { display: block; font-size: 13px; font-weight: 600; }
+  .mode-opt small { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+  .mode-tip code {
+    background: var(--card); padding: 1px 5px; border-radius: 4px;
+    font-family: ui-monospace, Consolas, monospace; font-size: 11.5px;
+  }
+
+  /* ---------- 清单表格 ---------- */
+  .list-tools {
+    display: flex; gap: 12px; align-items: center;
+    margin-bottom: 9px; flex-wrap: wrap;
+  }
+  .chk-all { font-size: 12.5px; color: var(--ink-2); display: flex; gap: 5px; align-items: center; cursor: pointer; }
+  .list-count { font-size: 12px; color: var(--ink-3); }
+
+  .list-table-wrap {
+    border: 1px solid var(--line); border-radius: 8px;
+    overflow: auto; max-height: 62vh;
+  }
+  .list-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  .list-table thead th {
+    position: sticky; top: 0; z-index: 1;
+    background: var(--card); text-align: left; font-weight: 600;
+    color: var(--ink-2); padding: 7px 8px;
+    border-bottom: 1px solid var(--line); white-space: nowrap;
+  }
+  .list-table td {
+    padding: 3px 6px; border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+  }
+  .list-table tr:last-child td { border-bottom: none; }
+  .list-table tr.off { opacity: .42; }
+  .list-table tr.dirty td:first-child { box-shadow: inset 3px 0 0 var(--warn); }
+  .list-table input[type=text] {
+    width: 100%; font: inherit; font-size: 12.5px; color: var(--ink);
+    background: transparent; border: 1px solid transparent;
+    border-radius: 5px; padding: 4px 5px; outline: none;
+  }
+  .list-table input[type=text]:hover { border-color: var(--line); }
+  .list-table input[type=text]:focus { border-color: var(--accent); background: var(--card); }
+  .list-table .cell-warn { color: var(--warn); font-size: 11px; }
+  .list-table .cell-muted { color: var(--ink-3); font-size: 11.5px; }
+  .list-table td.shrink { width: 1%; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="logo">录</span>
+      <div>
+        <h1>录入招聘公告</h1>
+        <p class="sub">粘贴公众号文章 / 公告文字 / 截图，自动抽成一条岗位</p>
+      </div>
+    </div>
+    <a class="btn" href="/">← 返回看板</a>
+  </div>
+</header>
+
+<main class="in-wrap">
+
+  <div id="msg"></div>
+
+  <!-- 输入区 -->
+  <section class="in-card" id="stepInput">
+    <h2>① 贴公告</h2>
+    <p class="hint">文字、长图都行。拖图片进下面的框，或直接 Ctrl+V 粘贴截图。</p>
+
+    <!-- 模式切换：单篇公告 vs 盘点清单 -->
+    <div class="mode-switch" id="modeSwitch">
+      <label class="mode-opt">
+        <input type="radio" name="mode" value="single" checked>
+        <span>
+          <b>单篇公告</b>
+          <small>一篇招聘文章 → 一条记录</small>
+        </span>
+      </label>
+      <label class="mode-opt">
+        <input type="radio" name="mode" value="list">
+        <span>
+          <b>盘点清单</b>
+          <small>「公司 base城市 截止」清单 → 多家公司</small>
+        </span>
+      </label>
+    </div>
+
+    <textarea id="text" placeholder="把招聘公告的文字粘在这里……&#10;&#10;也可以只放截图，下面上传图片即可。"></textarea>
+    <p class="hint mode-tip hidden" id="listTip" style="margin-top:-4px">
+      清单格式越规整越好，一行一家：<code>国药集团 base杭州 12月31日截止</code>。
+      规整清单**不调用模型**，直接秒出。
+    </p>
+
+    <div class="drop" id="drop" style="margin-top:10px">
+      点这里选图片，或把截图拖进来 / Ctrl+V 粘贴
+    </div>
+    <div class="thumbs" id="thumbs"></div>
+
+    <div class="row2">
+      <input type="text" id="source" placeholder="来源（如：小红书@喵中求职日记）">
+      <input type="text" id="sourceUrl" placeholder="来源链接（可选）">
+    </div>
+
+    <div class="row2" style="margin-top:14px">
+      <button class="btn btn-primary" id="go">开始抽取</button>
+      <button class="btn" id="clear">清空</button>
+    </div>
+  </section>
+
+  <!-- 结果区：清单模式 -->
+  <section class="in-card hidden" id="stepList">
+    <h2>② 核对清单 <span class="ch-tag" id="listSource" style="display:none"></span></h2>
+    <p class="hint">
+      逐条核对，取消勾选的不会保存。空白的字段表示原文没写，<b>可以留空</b> ——
+      能投的公司和截止日本身就比完整信息更重要。点单元格可直接改。
+    </p>
+
+    <div class="list-tools">
+      <label class="chk-all"><input type="checkbox" id="chkAll" checked> 全选</label>
+      <span class="list-count" id="listCount"></span>
+      <button class="btn" id="listBack">返回重贴</button>
+    </div>
+
+    <div class="list-table-wrap">
+      <table class="list-table" id="listTable">
+        <thead>
+          <tr>
+            <th style="width:34px"></th>
+            <th>公司</th>
+            <th>城市</th>
+            <th>截止</th>
+            <th>原文</th>
+            <th>备注/预警</th>
+          </tr>
+        </thead>
+        <tbody id="listBody"></tbody>
+      </table>
+    </div>
+
+    <div class="row2" style="margin-top:14px">
+      <button class="btn btn-primary" id="listSave">保存勾选的</button>
+      <button class="btn" id="listClear">清空</button>
+    </div>
+  </section>
+
+  <!-- 结果区 -->
+  <section class="in-card hidden" id="stepResult">
+    <h2>② 核对并保存 <span id="confBadge"></span></h2>
+    <p class="hint">抽取结果仅供参考，<b>红色标记的字段务必人工核对</b>。改完点保存。</p>
+
+    <div class="grid2">
+      <div class="fld">
+        <label>公司名称 <span class="warn" id="w-company"></span></label>
+        <input type="text" id="r-company">
+      </div>
+      <div class="fld">
+        <label>批次</label>
+        <input type="text" id="r-batch" placeholder="如 27届秋招">
+      </div>
+    </div>
+
+    <div class="fld">
+      <label>简章标题</label>
+      <input type="text" id="r-title">
+    </div>
+
+    <div class="fld">
+      <label>在招岗位（逗号分隔）</label>
+      <input type="text" id="r-positions" placeholder="采购专员, 供应计划工程师">
+    </div>
+
+    <div class="fld">
+      <label>专业要求（逗号分隔）</label>
+      <input type="text" id="r-majors" placeholder="工业工程, 物流管理">
+    </div>
+
+    <div class="fld">
+      <label>做什么的（一句话）</label>
+      <input type="text" id="r-work" placeholder="负责物料采购与交期跟催">
+    </div>
+
+    <div class="grid2">
+      <div class="fld">
+        <label>工作城市（逗号分隔）</label>
+        <input type="text" id="r-cities" placeholder="杭州">
+      </div>
+      <div class="fld">
+        <label>截止日期 <span class="warn" id="w-deadline"></span></label>
+        <input type="text" id="r-deadline" placeholder="YYYY-MM-DD，无明确日期留空">
+      </div>
+    </div>
+
+    <div class="fld">
+      <label>截止日期原文（留档用）</label>
+      <input type="text" id="r-deadlineRaw" placeholder="如：招满即止 / 10月19日截止">
+    </div>
+
+    <!-- 投递渠道 -->
+    <div class="in-card" style="background:var(--bg);box-shadow:none;margin:14px 0 0">
+      <h2 style="font-size:13px">投递渠道 <span class="warn" id="w-channel" style="font-size:11px;color:var(--warn);font-weight:400"></span></h2>
+      <p class="hint">这是投递时最省事的字段：能直接复制邮箱、直接点链接。</p>
+
+      <div class="fld">
+        <label>渠道类型</label>
+        <select class="in-sel" id="r-chType">
+          <option value="unknown">未识别</option>
+          <option value="email">邮箱投递</option>
+          <option value="link">网申链接</option>
+          <option value="wechat">微信公众号</option>
+          <option value="site">企业官网</option>
+        </select>
+      </div>
+
+      <div class="fld" id="emailWrap">
+        <label>邮箱地址（可直接复制）</label>
+        <input type="text" id="r-chEmail" class="code" placeholder="hr@example.com">
+      </div>
+
+      <div class="fld">
+        <label>投递链接 / 公告原文链接</label>
+        <input type="text" id="r-chUrl" class="code" placeholder="https://…">
+      </div>
+
+      <div class="fld" style="margin-bottom:0">
+        <label>投递路径（公众号怎么走 / 官网在哪找）</label>
+        <input type="text" id="r-chSteps" placeholder="关注公众号「XX招聘」→ 菜单「校园招聘」→ 选岗位">
+      </div>
+    </div>
+
+    <div class="fld" style="margin-top:14px">
+      <label>备注（薪资 / 学历 / 笔试 / 往届）</label>
+      <input type="text" id="r-note">
+    </div>
+
+    <div class="row2" style="margin-top:16px">
+      <button class="btn btn-primary" id="save">保存到看板</button>
+      <button class="btn" id="back">返回修改</button>
+    </div>
+  </section>
+
+  <!-- 原始返回（调试用） -->
+  <details class="in-card hidden" id="rawBox" style="font-size:12px">
+    <summary style="cursor:pointer;color:var(--ink-3)">模型原始返回（排错用）</summary>
+    <pre id="raw" style="overflow:auto;font-size:11.5px;color:var(--ink-3)"></pre>
+  </details>
+
+</main>
+
+<script src="intake.js"></script>
+</body>
+</html>

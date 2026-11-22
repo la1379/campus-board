@@ -1,0 +1,25 @@
+{
+  "name": "campus-board",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "校招看板 + 粘贴即结构化录入器（零依赖）",
+  "scripts": {
+    "start": "node server.mjs",
+    "start:mock": "node server.mjs --mock",
+    "migrate": "python -I scripts/migrate.py",
+    "collect:jd": "node scripts/collect-jd.mjs --merge",
+    "collect:qq": "node scripts/collect-qq.mjs --merge",
+    "collect:all": "node scripts/collect-jd.mjs --merge && node scripts/collect-qq.mjs --merge",
+    "publish": "node scripts/publish.mjs",
+    "deploy": "node scripts/deploy.mjs",
+    "fake-llm": "node scripts/fake-llm.mjs",
+    "import-key": "node scripts/import-key.mjs",
+    "ingest": "node scripts/ingest-text.mjs",
+    "import": "python -X utf8 scripts/import-xlsx.py",
+    "test:intake": "node scripts/test-intake.mjs",
+    "test:real": "node scripts/test-real.mjs",
+    "verify": "python -I scripts/verify_migrate.py && python -I scripts/verify_collect.py data/jd-raw.json && python -I scripts/verify_collect.py data/qq-raw.json",
+    "verify:api": "python -I scripts/verify_api.py"
+  }
+}

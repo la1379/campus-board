@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#1c1c22">
+<title>校招看板</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-inner">
+    <div class="brand">
+      <span class="logo">校</span>
+      <div>
+        <h1>校招看板</h1>
+        <p class="sub" id="subline">载入中…</p>
+      </div>
+    </div>
+    <div class="stat-row" id="statRow"></div>
+  </div>
+</header>
+
+<div class="toolbar">
+  <div class="toolbar-inner">
+    <input id="q" class="search" type="search" placeholder="搜公司或岗位关键词，空格分隔多个" autocomplete="off">
+    <!-- 城市多选：点开是勾选面板。岗位常挂多个城市，单选会漏 -->
+    <div class="multi" id="cityMulti">
+      <button class="sel multi-btn" id="cityBtn" type="button">
+        <span id="cityLabel">全部城市</span><i class="caret">▾</i>
+      </button>
+      <div class="multi-panel hidden" id="cityPanel">
+        <input type="search" class="multi-q" id="cityQ" placeholder="筛城市…" autocomplete="off">
+        <div class="multi-list" id="cityList"></div>
+        <div class="multi-foot">
+          <button class="btn" type="button" id="cityClear">清空</button>
+          <button class="btn" type="button" id="cityAll">全选可见</button>
+        </div>
+      </div>
+    </div>
+    <select id="batch" class="sel"><option value="">全部批次</option></select>
+    <select id="state" class="sel">
+      <option value="active">可投（隐藏已截止）</option>
+      <option value="all">全部</option>
+      <option value="star">仅 ★ 关注</option>
+      <option value="closing">7 天内截止</option>
+      <option value="match">匹配度 ≥ 60%</option>
+      <option value="expired">已截止</option>
+    </select>
+    <select id="sort" class="sel">
+      <option value="deadline">按截止日</option>
+      <option value="match">按匹配度</option>
+      <option value="created">按录入时间</option>
+      <option value="company">按公司名</option>
+    </select>
+    <button id="viewBtn" class="btn" title="切换视图">列表</button>
+    <button id="profileBtn" class="btn" title="设置你的专业/城市/方向">我的档案</button>
+    <!-- 静态版会被 publish.mjs 删掉这段：它没有后端，点进去只会 404 -->
+    <span id="adminLinks" style="display:contents">
+      <a class="btn" href="/intake.html" title="粘贴公告录入">录入</a>
+      <a class="btn" href="/admin.html" title="批量导入 Excel">导入</a>
+    </span>
+  </div>
+</div>
+
+<!-- 个人档案：分数现算的依据。改这里，整页匹配度立刻变。 -->
+<section class="profile-panel hidden" id="profilePanel">
+  <div class="profile-inner">
+    <p class="profile-hint">
+      这三项决定「匹配度」怎么算。分数不写进数据文件 —— 换个人看，同一条岗位的分数本来就该不同。
+      改动存在本机浏览器里，不上传。
+    </p>
+    <div class="profile-grid">
+      <label>我的专业（逗号分隔）
+        <input type="text" id="p-majors" placeholder="工业工程, 物流管理">
+      </label>
+      <label>意向城市（逗号分隔）
+        <input type="text" id="p-cities" placeholder="杭州, 上海">
+      </label>
+      <label>意向方向 / 关键词（逗号分隔）
+        <input type="text" id="p-dirs" placeholder="供应链, 采购, 计划">
+      </label>
+      <label>我的届数
+        <input type="text" id="p-batch" placeholder="2027届">
+      </label>
+    </div>
+    <div class="profile-actions">
+      <button class="btn on" id="p-save">保存并重算</button>
+      <button class="btn" id="p-reset">恢复默认</button>
+      <span class="profile-msg" id="p-msg"></span>
+    </div>
+  </div>
+</section>
+
+<main class="wrap">
+  <div class="chips" id="chips"></div>
+  <div id="list" class="list"></div>
+  <div id="tableWrap" class="table-wrap hidden"></div>
+  <p class="empty hidden" id="empty">没有符合条件的岗位</p>
+  <footer class="foot">
+    <span id="footCount"></span>
+    <span class="sep">·</span>
+    <span>数据为人工录入，投递前请到官方渠道复核截止时间</span>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
